@@ -70,6 +70,11 @@ resource "aws_eks_cluster" "this" {
   name     = var.cluster_name
   role_arn = var.lab_role_arn
 
+  # atributo imutavel (qualquer mudanca forca recriar o cluster inteiro) -
+  # fixado em false para bater com o valor real do cluster ja provisionado,
+  # já que o default do provider mudou para true em versoes mais novas.
+  bootstrap_self_managed_addons = false
+
   vpc_config {
     subnet_ids = data.aws_subnets.default.ids
   }
