@@ -31,6 +31,10 @@ provisionado em [`mecanica-db-infra-SOAT`](https://github.com/Castor-Garage/meca
    e escalar.
 4. **StorageClass `ebs-sc` (gp3) + addon EBS CSI driver** — o EKS não vem
    com StorageClass padrão nem driver de disco instalado.
+5. **New Relic Kubernetes integration** (Helm chart `newrelic/nri-bundle`,
+   namespace `newrelic`) — monitora pods e nodes do cluster inteiro.
+   Configuração dos toggles em `manifests/newrelic-values.yaml`; a license
+   key não fica no repo, é passada via `TF_VAR_new_relic_license_key`.
 
 **Não é feito aqui** (de propósito): deploy da API (job `deploy` do
 pipeline de `mecanica-pos-SOAT`) e provisionamento do banco de dados
@@ -42,6 +46,7 @@ pipeline de `mecanica-pos-SOAT`) e provisionamento do banco de dados
   (**Start Lab**, credenciais temporárias exportadas).
 - [AWS CLI](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html)
 - [kubectl](https://kubernetes.io/docs/tasks/tools/#kubectl)
+- [Helm](https://helm.sh/docs/intro/install/) (para a integração Kubernetes da New Relic)
 - [Terraform](https://developer.hashicorp.com/terraform/install) >= 1.5
 
 ## Uso
@@ -53,7 +58,9 @@ export AWS_SESSION_TOKEN=...
 export AWS_REGION=us-east-1
 
 terraform init
-terraform apply -var="lab_role_arn=arn:aws:iam::<account-id>:role/LabRole"
+terraform apply \
+  -var="lab_role_arn=arn:aws:iam::<account-id>:role/LabRole" \
+  -var="new_relic_license_key=<sua-license-key-ingest>"
 ```
 
 Ao final, o cluster `castor-garage` está no ar. Para apontar o `kubectl`
@@ -62,6 +69,7 @@ local pra ele:
 ```bash
 terraform output -raw update_kubeconfig_command | bash
 kubectl --context castor-garage get nodes
+terraform output -raw newrelic_check_command | bash
 ```
 
 ## Por que o cluster não é criado/destruído a cada push
@@ -92,6 +100,7 @@ Secrets do repositório (Settings → Secrets and variables → Actions):
 | `AWS_SECRET_ACCESS_KEY` | sessão temporária do AWS Academy |
 | `AWS_SESSION_TOKEN` | sessão temporária do AWS Academy |
 | `LAB_ROLE_ARN` | `arn:aws:iam::<account-id>:role/LabRole` |
+| `NEW_RELIC_LICENSE_KEY` | License key (INGEST - License) da conta New Relic |
 
 Como as credenciais do Academy são temporárias (expiram em poucas horas),
 **atualize os 3 primeiros secrets toda vez que reiniciar a sessão do Lab**,
@@ -102,7 +111,9 @@ não perder a execução no meio por expiração de sessão.
 ## Destruir
 
 ```bash
-terraform destroy -var="lab_role_arn=arn:aws:iam::<account-id>:role/LabRole"
+terraform destroy \
+  -var="lab_role_arn=arn:aws:iam::<account-id>:role/LabRole" \
+  -var="new_relic_license_key=<sua-license-key-ingest>"
 ```
 
 ## Risco conhecido

@@ -41,6 +41,7 @@ jobs:
         run: terraform plan -no-color
         env:
           TF_VAR_lab_role_arn: ${{ secrets.LAB_ROLE_ARN }}
+          TF_VAR_new_relic_license_key: ${{ secrets.NEW_RELIC_LICENSE_KEY }}
 
   apply:
     name: Terraform apply
@@ -62,6 +63,8 @@ jobs:
 
       - uses: azure/setup-kubectl@v4
 
+      - uses: azure/setup-helm@v4
+
       - name: Terraform init
         run: terraform init
 
@@ -69,6 +72,7 @@ jobs:
         run: terraform apply -auto-approve
         env:
           TF_VAR_lab_role_arn: ${{ secrets.LAB_ROLE_ARN }}
+          TF_VAR_new_relic_license_key: ${{ secrets.NEW_RELIC_LICENSE_KEY }}
 
       - name: Mostrar outputs
         run: |

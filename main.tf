@@ -124,9 +124,12 @@ resource "aws_eks_node_group" "this" {
 resource "null_resource" "kubeconfig" {
   depends_on = [aws_eks_node_group.this]
 
+  # sempre reroda: cada CI run parte de um runner novo, sem ~/.kube/config -
+  # um trigger baseado em valor estatico faria o Terraform pular esta etapa
+  # (nada mudou desde o ultimo apply) mesmo sem o contexto existir no runner
+  # atual, quebrando os null_resource abaixo que dependem dele.
   triggers = {
-    cluster_name = var.cluster_name
-    region       = var.aws_region
+    always_run = timestamp()
   }
 
   provisioner "local-exec" {
@@ -173,6 +176,32 @@ resource "null_resource" "metrics_server" {
       set -e
       kubectl --context "${local.kube_context}" apply -f "${local.metrics_server_manifest}"
       kubectl --context "${local.kube_context}" -n kube-system rollout status deployment/metrics-server --timeout=180s
+    EOT
+  }
+}
+
+# New Relic Kubernetes integration (Helm chart nri-bundle) - monitora pods e
+# nodes do cluster inteiro. Segue o mesmo padrao de local-exec+CLI usado acima
+# para metrics-server/storageclass (sem provider helm/kubernetes do Terraform),
+# pra nao precisar credenciar outro provider so pra isso.
+resource "null_resource" "newrelic_kubernetes" {
+  depends_on = [null_resource.kubeconfig, aws_eks_node_group.this]
+
+  triggers = {
+    values_hash = filesha256("${path.module}/manifests/newrelic-values.yaml")
+  }
+
+  provisioner "local-exec" {
+    interpreter = ["bash", "-c"]
+    command     = <<-EOT
+      set -e
+      helm repo add newrelic https://helm-charts.newrelic.com >/dev/null 2>&1 || true
+      helm repo update newrelic
+      helm upgrade --install newrelic-bundle newrelic/nri-bundle \
+        --kube-context "${local.kube_context}" \
+        --namespace newrelic --create-namespace \
+        --set global.licenseKey="${var.new_relic_license_key}" \
+        -f "${path.module}/manifests/newrelic-values.yaml"
     EOT
   }
 }
