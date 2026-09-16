@@ -44,3 +44,9 @@ variable "eks_supported_azs" {
   type        = list(string)
   default     = ["us-east-1a", "us-east-1b", "us-east-1c", "us-east-1d", "us-east-1f"]
 }
+
+variable "new_relic_license_key" {
+  description = "License key (INGEST - License) da New Relic, usada pela integracao de Kubernetes (Helm nri-bundle instalado por null_resource.newrelic_kubernetes). Passe via TF_VAR_new_relic_license_key - nunca commitar em texto plano."
+  type        = string
+  sensitive   = true
+}

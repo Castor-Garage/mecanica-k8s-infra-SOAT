@@ -1,0 +1,25 @@
+# Values do Helm chart newrelic/nri-bundle (New Relic Kubernetes integration).
+# A license key NAO fica aqui - e passada via --set na chamada do helm em
+# main.tf (null_resource.newrelic_kubernetes), a partir de
+# TF_VAR_new_relic_license_key, pra nao commitar segredo em texto plano.
+global:
+  cluster: castor-garage
+
+newrelic-infrastructure:
+  enabled: true
+  privileged: true
+
+ksm:
+  enabled: true
+
+kubeEvents:
+  enabled: true
+
+logging:
+  enabled: false
+
+prometheus:
+  enabled: false
+
+metrics-adapter:
+  enabled: false
