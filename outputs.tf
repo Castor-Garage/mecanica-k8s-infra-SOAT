@@ -22,3 +22,8 @@ output "newrelic_check_command" {
   description = "Comando para verificar se os pods da integracao Kubernetes da New Relic (nri-bundle) estao rodando"
   value       = "kubectl --context ${local.kube_context} -n newrelic get pods"
 }
+
+output "saga_queue_urls" {
+  description = "URLs das filas SQS do Saga Pattern (billing-commands, execucao-commands, os-events) - tambem publicadas em /castor-garage/queues/<nome>-url no SSM Parameter Store"
+  value       = { for name, q in aws_sqs_queue.saga : name => q.url }
+}
