@@ -30,8 +30,17 @@ jobs:
           aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
           aws-region: ${{ env.AWS_REGION }}
 
+      # O bucket do state leva o ID da conta AWS das credenciais em uso
+      # (castor-garage-tfstate-<account-id>), entao o pipeline funciona com a
+      # conta do Academy de qualquer integrante. Cria o bucket se nao existir.
       - name: Terraform init
-        run: terraform init
+        run: |
+          TFSTATE_BUCKET="castor-garage-tfstate-$(aws sts get-caller-identity --query Account --output text)"
+          if ! aws s3api head-bucket --bucket "$TFSTATE_BUCKET" 2>/dev/null; then
+            aws s3api create-bucket --bucket "$TFSTATE_BUCKET" --region us-east-1
+            aws s3api put-bucket-versioning --bucket "$TFSTATE_BUCKET" --versioning-configuration Status=Enabled
+          fi
+          terraform init -backend-config="bucket=${TFSTATE_BUCKET}"
 
       - name: Terraform validate
         run: terraform validate
@@ -65,8 +74,11 @@ jobs:
 
       - uses: azure/setup-helm@v4
 
+      # Mesmo bucket por conta do job validate.
       - name: Terraform init
-        run: terraform init
+        run: |
+          TFSTATE_BUCKET="castor-garage-tfstate-$(aws sts get-caller-identity --query Account --output text)"
+          terraform init -backend-config="bucket=${TFSTATE_BUCKET}"
 
       - name: Terraform apply
         run: terraform apply -auto-approve
