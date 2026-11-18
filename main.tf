@@ -5,7 +5,8 @@
 # gerenciado, provisionado em mecanica-db-infra-SOAT (repositorio 3).
 #
 #   1. Cluster EKS + node group, reaproveitando o LabRole (Academy nao deixa
-#      criar IAM roles novas) como cluster role e node role.
+#      criar IAM roles novas) como cluster role e node role, e os addons de
+#      rede (vpc-cni, kube-proxy, coredns).
 #   2. Tags de ELB nas subnets default, necessarias para o Service
 #      "LoadBalancer" da API conseguir provisionar um Network Load Balancer.
 #   3. metrics-server (necessario para o HPA em k8s/api/hpa.yaml funcionar,
@@ -73,11 +74,32 @@ resource "aws_eks_cluster" "this" {
   # atributo imutavel (qualquer mudanca forca recriar o cluster inteiro) -
   # fixado em false para bater com o valor real do cluster ja provisionado,
   # já que o default do provider mudou para true em versoes mais novas.
+  # Com false o EKS nao instala vpc-cni/kube-proxy/coredns sozinho: eles vem
+  # dos aws_eks_addon abaixo.
   bootstrap_self_managed_addons = false
 
   vpc_config {
     subnet_ids = data.aws_subnets.default.ids
   }
+}
+
+# Rede do cluster como addons gerenciados. Sem o vpc-cni e o kube-proxy os
+# nodes sobem mas nunca ficam Ready (sem plugin de CNI) e o node group fica
+# preso em "Still creating" ate falhar. Os dois sao DaemonSets e entram antes
+# do node group, para os nodes ja subirem com rede; o coredns e um Deployment
+# e so fica ACTIVE com nodes no ar, entao entra depois.
+resource "aws_eks_addon" "vpc_cni" {
+  cluster_name                = aws_eks_cluster.this.name
+  addon_name                  = "vpc-cni"
+  resolve_conflicts_on_create = "OVERWRITE"
+  resolve_conflicts_on_update = "OVERWRITE"
+}
+
+resource "aws_eks_addon" "kube_proxy" {
+  cluster_name                = aws_eks_cluster.this.name
+  addon_name                  = "kube-proxy"
+  resolve_conflicts_on_create = "OVERWRITE"
+  resolve_conflicts_on_update = "OVERWRITE"
 }
 
 # Node groups gerenciados criam as instancias com IMDSv2 hop-limit=1 por
@@ -103,6 +125,7 @@ resource "aws_launch_template" "node" {
 }
 
 resource "aws_eks_node_group" "this" {
+  depends_on      = [aws_eks_addon.vpc_cni, aws_eks_addon.kube_proxy]
   cluster_name    = aws_eks_cluster.this.name
   node_group_name = "${var.cluster_name}-ng"
   node_role_arn   = var.lab_role_arn
@@ -119,6 +142,14 @@ resource "aws_eks_node_group" "this" {
     min_size     = var.min_size
     max_size     = var.max_size
   }
+}
+
+resource "aws_eks_addon" "coredns" {
+  depends_on                  = [aws_eks_node_group.this]
+  cluster_name                = aws_eks_cluster.this.name
+  addon_name                  = "coredns"
+  resolve_conflicts_on_create = "OVERWRITE"
+  resolve_conflicts_on_update = "OVERWRITE"
 }
 
 resource "null_resource" "kubeconfig" {
@@ -164,7 +195,7 @@ resource "null_resource" "storage_class" {
 }
 
 resource "null_resource" "metrics_server" {
-  depends_on = [null_resource.kubeconfig]
+  depends_on = [null_resource.kubeconfig, aws_eks_addon.coredns]
 
   triggers = {
     manifest_hash = filesha256(local.metrics_server_manifest)
@@ -185,7 +216,7 @@ resource "null_resource" "metrics_server" {
 # para metrics-server/storageclass (sem provider helm/kubernetes do Terraform),
 # pra nao precisar credenciar outro provider so pra isso.
 resource "null_resource" "newrelic_kubernetes" {
-  depends_on = [null_resource.kubeconfig, aws_eks_node_group.this]
+  depends_on = [null_resource.kubeconfig, aws_eks_node_group.this, aws_eks_addon.coredns]
 
   triggers = {
     values_hash = filesha256("${path.module}/manifests/newrelic-values.yaml")
