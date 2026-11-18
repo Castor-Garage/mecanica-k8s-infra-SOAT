@@ -57,11 +57,19 @@ export AWS_SECRET_ACCESS_KEY=...
 export AWS_SESSION_TOKEN=...
 export AWS_REGION=us-east-1
 
-terraform init
+TFSTATE_BUCKET="castor-garage-tfstate-$(aws sts get-caller-identity --query Account --output text)"
+terraform init -backend-config="bucket=${TFSTATE_BUCKET}"
 terraform apply \
   -var="lab_role_arn=arn:aws:iam::<account-id>:role/LabRole" \
   -var="new_relic_license_key=<sua-license-key-ingest>"
 ```
+
+O state fica no bucket `castor-garage-tfstate-<account-id>`, com o ID da
+conta AWS das credenciais em uso, para o mesmo código servir à conta do
+Academy de qualquer integrante. O pipeline cria esse bucket (com
+versionamento) na primeira execução numa conta nova; rodando só local
+numa conta nova, crie antes com
+`aws s3api create-bucket --bucket "$TFSTATE_BUCKET" --region us-east-1`.
 
 Ao final, o cluster `castor-garage` está no ar. Para apontar o `kubectl`
 local pra ele:
